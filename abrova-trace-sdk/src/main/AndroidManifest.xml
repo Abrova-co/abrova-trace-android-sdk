@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Required for sending error reports -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Optional: For offline error caching -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <application>
+        <!-- Provider for initializing SDK automatically -->
+        <provider
+            android:name="ir.abrova.trace.sdk.AbrovaTraceInitProvider"
+            android:authorities="${applicationId}.abrova-trace-init"
+            android:exported="false"
+            android:initOrder="100" />
+
+        <!-- Service for ANR detection -->
+        <service
+            android:name="ir.abrova.trace.sdk.services.ANRWatchdogService"
+            android:exported="false" />
+    </application>
+
+</manifest>

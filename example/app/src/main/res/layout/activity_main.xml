@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="AbrovaTrace SDK Example"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Test error tracking, logging, and performance features"
+            android:textSize="14sp"
+            android:textColor="#666666"
+            android:layout_marginBottom="24dp" />
+
+        <!-- Error Tracking Section -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Error Tracking"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <Button
+            android:id="@+id/btnCaptureException"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Capture Exception" />
+
+        <Button
+            android:id="@+id/btnCaptureMessage"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Capture Message" />
+
+        <Button
+            android:id="@+id/btnTriggerCrash"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Trigger Crash (will crash app!)"
+            android:backgroundTint="#F44336" />
+
+        <!-- Breadcrumbs Section -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Breadcrumbs"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="8dp" />
+
+        <Button
+            android:id="@+id/btnAddBreadcrumb"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Add Breadcrumb" />
+
+        <Button
+            android:id="@+id/btnNavigate"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Navigate (auto breadcrumb)" />
+
+        <Button
+            android:id="@+id/btnHttpRequest"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="HTTP Request" />
+
+        <!-- User Section -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="User Context"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="8dp" />
+
+        <Button
+            android:id="@+id/btnSetUser"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Set User ID" />
+
+        <!-- Performance Section -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Performance"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="8dp" />
+
+        <Button
+            android:id="@+id/btnTrackPerformance"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Track Performance (Manual Spans)" />
+
+        <Button
+            android:id="@+id/btnPerformanceInterceptor"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Performance Interceptor (Auto HTTP)" />
+
+        <Button
+            android:id="@+id/btnDbQuerySpan"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="DB Query Span" />
+
+        <Button
+            android:id="@+id/btnTrackOperation"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Track Operation (Auto-timed)" />
+
+        <Button
+            android:id="@+id/btnBatchSpans"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Batch Span Reporting" />
+
+        <!-- Logging Section -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Logging"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="8dp" />
+
+        <Button
+            android:id="@+id/btnSendLogs"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Send Logs" />
+
+        <!-- Advanced Features Section -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Advanced Features"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="8dp" />
+
+        <Button
+            android:id="@+id/btnCrashDetection"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Check Crash Detection" />
+
+        <Button
+            android:id="@+id/btnSampleRate"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Sample Rate Demo (10 errors)" />
+
+        <!-- Native crash tests -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Native Crash Tests (kills app)"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="8dp" />
+
+        <Button
+            android:id="@+id/btnNativeSigsegv"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Native Crash (SIGSEGV)"
+            android:backgroundTint="#B71C1C" />
+
+        <Button
+            android:id="@+id/btnNativeAbort"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Native Crash (abort)"
+            android:backgroundTint="#B71C1C" />
+
+        <Button
+            android:id="@+id/btnNativeAnr"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="ANR (block main 15s)"
+            android:backgroundTint="#E65100" />
+
+    </LinearLayout>
+</ScrollView>
