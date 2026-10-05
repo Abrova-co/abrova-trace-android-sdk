@@ -2,22 +2,37 @@ package ir.abrova.trace.sdk.services
 
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import ir.abrova.trace.sdk.utils.AbrovaTraceLogger
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 /**
  * ANR (Application Not Responding) Watchdog
  * Detects when the main thread is blocked for too long
  */
-class ANRWatchdog(
-    private val timeoutMs: Long = 5000L,
-    private val onAnrDetected: (String) -> Unit
+class ANRWatchdog internal constructor(
+    private val timeoutMs: Long,
+    private val recoveryPollMs: Long,
+    private val postToMain: (Runnable) -> Unit,
+    private val now: () -> Long,
+    private val mainThread: () -> Thread,
+    private val onAnrDetected: (stackTrace: String, blockedMs: Long) -> Unit
 ) : Thread("AbrovaTrace-ANR-Watchdog") {
 
-    private val mainHandler = Handler(Looper.getMainLooper())
+    constructor(
+        timeoutMs: Long = DEFAULT_TIMEOUT_MS,
+        onAnrDetected: (stackTrace: String, blockedMs: Long) -> Unit
+    ) : this(
+        timeoutMs = timeoutMs,
+        recoveryPollMs = RECOVERY_POLL_MS,
+        postToMain = Handler(Looper.getMainLooper()).let { handler -> { ping -> handler.post(ping) } },
+        now = { SystemClock.uptimeMillis() },
+        mainThread = { Looper.getMainLooper().thread },
+        onAnrDetected = onAnrDetected
+    )
+
+    // Time the current ping was posted to the main thread; 0 once it ran.
     private val tick = AtomicLong(0)
-    private val reported = AtomicBoolean(false)
 
     @Volatile
     private var running = true
@@ -31,31 +46,23 @@ class ANRWatchdog(
 
         while (running && !isInterrupted) {
             try {
-                // Reset the tick counter
-                reported.set(false)
-                tick.set(System.currentTimeMillis())
+                val postedAt = now()
+                tick.set(postedAt)
+                postToMain(Runnable { tick.set(0) })
 
-                // Post a runnable to main thread
-                mainHandler.post {
-                    tick.set(0)
-                }
-
-                // Wait for timeout period
                 sleep(timeoutMs)
 
-                // Check if main thread responded
-                val tickValue = tick.get()
-                if (tickValue != 0L && running) {
-                    val anrDuration = System.currentTimeMillis() - tickValue
-                    if (anrDuration >= timeoutMs && !reported.getAndSet(true)) {
-                        AbrovaTraceLogger.warn("ANR detected! Main thread blocked for ${anrDuration}ms")
+                if (tick.get() != 0L && running) {
+                    val blockedMs = now() - postedAt
+                    AbrovaTraceLogger.warn("ANR detected! Main thread blocked for ${blockedMs}ms")
 
-                        // Capture main thread stack trace
-                        val mainThread = Looper.getMainLooper().thread
-                        val stackTrace = mainThread.stackTrace
-                        val stackTraceString = formatStackTrace(mainThread, stackTrace)
+                    val main = mainThread()
+                    onAnrDetected(formatStackTrace(main, main.stackTrace), blockedMs)
 
-                        onAnrDetected(stackTraceString)
+                    // One hang is one report: wait for the main thread to
+                    // come back before watching for the next hang.
+                    while (running && tick.get() != 0L) {
+                        sleep(recoveryPollMs)
                     }
                 }
             } catch (e: InterruptedException) {
@@ -119,6 +126,8 @@ class ANRWatchdog(
          * Default timeout for ANR detection (5 seconds, same as Android's threshold)
          */
         const val DEFAULT_TIMEOUT_MS = 5000L
+
+        private const val RECOVERY_POLL_MS = 250L
     }
 }
 
@@ -132,7 +141,7 @@ class ANRWatchdogService {
     /**
      * Start ANR detection
      */
-    fun start(timeoutMs: Long = ANRWatchdog.DEFAULT_TIMEOUT_MS, onAnrDetected: (String) -> Unit) {
+    fun start(timeoutMs: Long = ANRWatchdog.DEFAULT_TIMEOUT_MS, onAnrDetected: (stackTrace: String, blockedMs: Long) -> Unit) {
         if (watchdog?.isAlive == true) {
             AbrovaTraceLogger.debug("ANR Watchdog already running")
             return

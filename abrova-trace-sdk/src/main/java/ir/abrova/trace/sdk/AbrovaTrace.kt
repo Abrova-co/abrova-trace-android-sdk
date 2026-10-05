@@ -3,6 +3,7 @@ package ir.abrova.trace.sdk
 import android.app.Activity
 import android.app.Application
 import android.content.Context
+import android.os.Build
 import android.os.Bundle
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -20,7 +21,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * AbrovaTrace Android SDK
  *
  * Error tracking SDK for Android applications.
- * Supports API 16+ (Android 4.1 Jelly Bean and above).
+ * Supports API 19+ (Android 4.4 KitKat and above).
  *
  * Usage:
  * ```kotlin
@@ -46,6 +47,7 @@ object AbrovaTrace {
     private var client: AbrovaTraceClient? = null
     private var context: Context? = null
     private var nativeCrashReporter: NativeCrashReporter? = null
+    private var handledCrashMarkers: HandledCrashMarkers? = null
     private var anrWatchdog: ANRWatchdogService? = null
 
     private val isInitialized = AtomicBoolean(false)
@@ -99,6 +101,17 @@ object AbrovaTrace {
 
         // Configure breadcrumbs
         BreadcrumbService.setMaxBreadcrumbs(config.maxBreadcrumbs)
+
+        // Offline storage: keep errors that cannot be sent while the network
+        // is down, and resend what an earlier session left behind.
+        setupOfflineStorage()
+
+        // Where the uncaught exception handler notes the crashes it reported,
+        // so the exit records read below are not reported a second time.
+        if (config.captureSignalCrashes && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val appContext = context.applicationContext
+            handledCrashMarkers = HandledCrashMarkers({ storageDirectory(appContext) })
+        }
 
         // Setup uncaught exception handler (real JVM/Kotlin crashes)
         if (config.captureUncaughtExceptions) {
@@ -683,12 +696,42 @@ object AbrovaTrace {
         return true
     }
 
+    private fun setupOfflineStorage() {
+        try {
+            val ctx = context ?: return
+            val cfg = config ?: return
+            val c = client ?: return
+
+            // Null when enableOfflineStorage is off: nothing is stored and
+            // the disk is not touched.
+            val store = OfflineErrorStore.createIfEnabled(cfg) {
+                // Runs on a background thread, on first use.
+                storageDirectory(ctx)
+            } ?: return
+
+            c.offlineStore = store
+
+            // Background pass over anything stored by an earlier session.
+            c.flushStoredErrors()
+        } catch (t: Throwable) {
+            AbrovaTraceLogger.error("Offline storage setup failed: ${t.message}")
+        }
+    }
+
+    /** App-private directory for the SDK's own files. Touches the disk. */
+    private fun storageDirectory(ctx: Context): java.io.File? {
+        val noBackup = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            ctx.noBackupFilesDir
+        } else null
+        return noBackup ?: ctx.filesDir
+    }
+
     private fun setupNativeCrashReporting() {
         val ctx = context ?: return
         val cfg = config ?: return
         val c = client ?: return
 
-        val reporter = NativeCrashReporter(ctx)
+        val reporter = NativeCrashReporter(ctx, handledCrashMarkers)
         nativeCrashReporter = reporter
 
         // Drain and dispatch on a background thread. Synchronous OkHttp on the
@@ -742,33 +785,23 @@ object AbrovaTrace {
         originalExceptionHandler = Thread.getDefaultUncaughtExceptionHandler()
 
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            AbrovaTraceLogger.error("Uncaught exception in thread ${thread.name}", throwable)
-
+            // The app is going down: the previous handler may keep the main
+            // thread busy for as long as the system's crash dialog is open,
+            // and that is not a hang to report.
             try {
-                val cfg = config ?: return@setDefaultUncaughtExceptionHandler
-                val error = AbrovaTraceError.fromThrowable(
-                    throwable = throwable,
-                    message = "Uncaught exception in thread: ${thread.name}",
-                    environment = cfg.environment,
-                    releaseVersion = cfg.release ?: DeviceInfo.getAppVersion(context!!),
-                    userAgent = userAgent,
-                    breadcrumbs = BreadcrumbService.getBreadcrumbs(),
-                    extra = extraContext + mapOf(
-                        "user_id" to userId,
-                        "session_id" to sessionId,
-                        "thread_name" to thread.name,
-                        "thread_id" to thread.id,
-                        "error_type" to "uncaught_exception",
-                        "device_info" to DeviceInfo.getDeviceInfo()
-                    ),
-                    tags = tags,
-                    url = currentActivityName?.let { "android://$it" }
-                )
+                anrWatchdog?.stop()
+            } catch (_: Throwable) {
+            }
 
-                // Send synchronously to ensure delivery before crash
-                client?.sendErrorSync(error)
-            } catch (e: Exception) {
-                AbrovaTraceLogger.error("Failed to send crash report: ${e.message}")
+            // Whatever happens here, the previous handler runs afterwards:
+            // the SDK must never change how the app crashes.
+            try {
+                reportUncaughtException(thread, throwable)
+            } catch (t: Throwable) {
+                try {
+                    AbrovaTraceLogger.error("Failed to report crash: ${t.message}")
+                } catch (_: Throwable) {
+                }
             }
 
             // Call original handler
@@ -778,11 +811,50 @@ object AbrovaTrace {
         AbrovaTraceLogger.debug("Uncaught exception handler installed")
     }
 
+    /**
+     * Runs on the crashing thread, which is often the main thread. The
+     * report is sent from a helper thread while this one waits a bounded
+     * time; a report that was not accepted in that time is stored for the
+     * next launch (when offline storage is enabled).
+     */
+    private fun reportUncaughtException(thread: Thread, throwable: Throwable) {
+        AbrovaTraceLogger.error("Uncaught exception in thread ${thread.name}", throwable)
+
+        val cfg = config ?: return
+        val c = client ?: return
+        val error = AbrovaTraceError.fromThrowable(
+            throwable = throwable,
+            message = "Uncaught exception in thread: ${thread.name}",
+            environment = cfg.environment,
+            releaseVersion = cfg.release ?: DeviceInfo.getAppVersion(context!!),
+            userAgent = userAgent,
+            breadcrumbs = BreadcrumbService.getBreadcrumbs(),
+            extra = extraContext + mapOf(
+                "user_id" to userId,
+                "session_id" to sessionId,
+                "thread_name" to thread.name,
+                "thread_id" to thread.id,
+                "error_type" to "uncaught_exception",
+                "device_info" to DeviceInfo.getDeviceInfo()
+            ),
+            tags = tags,
+            url = currentActivityName?.let { "android://$it" }
+        )
+
+        val markers = handledCrashMarkers
+        c.deliverCrashReport(
+            error = error,
+            onHandled = if (markers == null) null else {
+                { markers.record(android.os.Process.myPid(), System.currentTimeMillis()) }
+            }
+        )
+    }
+
     private fun setupAnrDetection() {
         val cfg = config ?: return
         anrWatchdog = ANRWatchdogService()
 
-        anrWatchdog?.start(cfg.anrTimeoutMs) { stackTrace ->
+        anrWatchdog?.start(cfg.anrTimeoutMs) { stackTrace, blockedMs ->
             AbrovaTraceLogger.warn("ANR detected, sending report...")
 
             val error = AbrovaTraceError.anr(
@@ -790,7 +862,7 @@ object AbrovaTrace {
                 environment = cfg.environment,
                 releaseVersion = cfg.release ?: DeviceInfo.getAppVersion(context!!),
                 userAgent = userAgent,
-                anrDurationMs = cfg.anrTimeoutMs
+                anrDurationMs = blockedMs
             )
 
             client?.sendError(error)

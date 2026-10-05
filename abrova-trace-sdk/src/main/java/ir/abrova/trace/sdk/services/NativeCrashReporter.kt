@@ -27,13 +27,18 @@ import java.io.ByteArrayOutputStream
  *   install, because it survives the very signals that terminate the process.
  * - JVM/Kotlin crashes are also captured by [AbrovaTrace]'s in-process
  *   `Thread.setDefaultUncaughtExceptionHandler` for immediate (same-session)
- *   delivery. This class is the cold-start safety net.
+ *   delivery. This class is the cold-start safety net: a REASON_CRASH record
+ *   is reported from here only when that handler did not report the crash
+ *   itself (see [HandledCrashMarkers]).
  *
  * On API 29 and below, the historical API is unavailable and this class
  * silently does nothing. JVM crashes are still captured by the in-process
  * uncaught handler.
  */
-internal class NativeCrashReporter(private val context: Context) {
+internal class NativeCrashReporter(
+    private val context: Context,
+    private val handledCrashes: HandledCrashMarkers? = null
+) {
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
@@ -61,10 +66,17 @@ internal class NativeCrashReporter(private val context: Context) {
         }
 
         val pending = mutableListOf<PendingCrash>()
+        val handled = handledCrashes?.readAll() ?: emptyList()
 
         for (info in infos) {
             if (info.timestamp <= sinceTimestamp) continue
             val reasonKey = exitReasonKey(info.reason) ?: continue
+            if (isAlreadyReported(info.reason, info.pid, info.timestamp, handled)) {
+                AbrovaTraceLogger.debug(
+                    "Exit record of pid ${info.pid} skipped: the crash was reported when it happened"
+                )
+                continue
+            }
             pending += PendingCrash(
                 timestamp = info.timestamp,
                 error = buildError(info, reasonKey, environment, releaseVersion, userAgent)
@@ -237,6 +249,21 @@ internal class NativeCrashReporter(private val context: Context) {
     }
 
     companion object {
+        /**
+         * True for the exit record of a JVM crash that the uncaught exception
+         * handler already sent or stored. Native crash and ANR records are
+         * never matched: nothing else reports those.
+         */
+        internal fun isAlreadyReported(
+            reason: Int,
+            pid: Int,
+            timestamp: Long,
+            handled: List<HandledCrashMarkers.Marker>
+        ): Boolean {
+            return reason == ApplicationExitInfo.REASON_CRASH &&
+                HandledCrashMarkers.covers(handled, pid, timestamp)
+        }
+
         private const val PREFS_NAME = "abrova_trace_native_crash"
         private const val KEY_LAST_PROCESSED_TIMESTAMP = "last_processed_timestamp"
         private const val MAX_RECORDS_TO_FETCH = 20

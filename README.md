@@ -27,7 +27,7 @@ Kotlin DSL: `maven { url = uri("https://center.abrova.ir/api/packages/abrova/mav
 ```groovy
 // app/build.gradle
 dependencies {
-    implementation "ir.abrova.trace:abrova-trace-android-sdk:0.2.0"
+    implementation "ir.abrova.trace:abrova-trace-android-sdk:0.2.3"
 }
 ```
 

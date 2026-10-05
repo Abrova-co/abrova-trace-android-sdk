@@ -14,7 +14,8 @@ package ir.abrova.trace.sdk
  * @property anrTimeoutMs ANR detection timeout in milliseconds (default: 5000ms)
  * @property maxBreadcrumbs Maximum number of breadcrumbs to store (default: 20)
  * @property httpTimeout HTTP request timeout in seconds
- * @property enableOfflineStorage Cache errors when offline for later sending
+ * @property enableOfflineStorage Keep errors that could not be sent because the network was
+ *   unavailable (up to 100, on app-private storage) and send them later
  * @property sampleRate Sample rate for error capture (0.0 to 1.0)
  * @property apiUrl Base URL of the AbrovaTrace server (override for self-hosted instances)
  */

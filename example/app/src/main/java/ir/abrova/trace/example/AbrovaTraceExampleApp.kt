@@ -12,7 +12,6 @@ class AbrovaTraceExampleApp : Application() {
         // Initialize AbrovaTrace SDK
         val config = AbrovaTraceConfig.Builder("ab_live_your_api_key")
             .environment(if (BuildConfig.DEBUG) "development" else "production")
-            .apiUrl("http://10.0.2.2:3001")
             .release(BuildConfig.VERSION_NAME)
             .debug(BuildConfig.DEBUG)
             .captureUncaughtExceptions(true)

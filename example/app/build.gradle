@@ -9,7 +9,7 @@ android {
 
     defaultConfig {
         applicationId "ir.abrova.trace.example"
-        minSdk 21  // Example uses API 21+, but SDK supports API 16+
+        minSdk 21  // Example uses API 21+, but SDK supports API 19+
         targetSdk 34
         versionCode 1
         versionName "1.0.0"

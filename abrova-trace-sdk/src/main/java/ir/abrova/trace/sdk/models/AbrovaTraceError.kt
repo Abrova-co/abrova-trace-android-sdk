@@ -2,6 +2,7 @@ package ir.abrova.trace.sdk.models
 
 import com.google.gson.annotations.SerializedName
 import java.util.Date
+import java.util.UUID
 
 /**
  * Represents an error to be sent to AbrovaTrace
@@ -41,7 +42,15 @@ data class AbrovaTraceError(
 
     val tags: Map<String, String> = emptyMap(),
 
-    val url: String? = null
+    val url: String? = null,
+
+    /**
+     * Identifies this one event. A report that is sent again (for example a
+     * stored copy on the next launch) keeps its id, so the server counts it
+     * once.
+     */
+    @SerializedName("event_id")
+    val eventId: String = UUID.randomUUID().toString()
 ) {
     /**
      * Convert to map for JSON serialization
@@ -60,7 +69,8 @@ data class AbrovaTraceError(
             "extra" to extra,
             "level" to level,
             "tags" to tags,
-            "url" to url
+            "url" to url,
+            "event_id" to eventId
         ).filterValues { it != null }
     }
 

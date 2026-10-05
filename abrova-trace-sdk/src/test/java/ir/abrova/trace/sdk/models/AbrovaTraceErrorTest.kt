@@ -259,4 +259,14 @@ class AbrovaTraceErrorTest {
         assertFalse(error.extra.containsKey("anr_duration_ms"))
         assertTrue(error.extra.containsKey("error_type"))
     }
+
+    @Test
+    fun `every error has its own event id and sends it`() {
+        val first = AbrovaTraceError(message = "boom")
+        val second = AbrovaTraceError(message = "boom")
+
+        assertNotEquals(first.eventId, second.eventId)
+        assertEquals(first.eventId, first.toMap()["event_id"])
+        assertEquals(36, first.eventId.length)
+    }
 }
