@@ -14,6 +14,14 @@ android {
         versionCode 1
         versionName "1.0.0"
 
+        // Optional, from local.properties (never committed): abrovatrace.apiKey and abrovatrace.apiUrl
+        // (another Trace server, for example one you run yourself). Empty = the values in the code.
+        def props = new Properties()
+        def file = rootProject.file('local.properties')
+        if (file.exists()) file.withInputStream { props.load(it) }
+        buildConfigField 'String', 'ABROVA_TRACE_API_KEY', "\"${props.getProperty('abrovatrace.apiKey', '')}\""
+        buildConfigField 'String', 'ABROVA_TRACE_API_URL', "\"${props.getProperty('abrovatrace.apiUrl', '')}\""
+
         externalNativeBuild {
             cmake {
                 cppFlags '-std=c++11'

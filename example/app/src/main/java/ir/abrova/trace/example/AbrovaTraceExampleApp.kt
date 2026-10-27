@@ -10,7 +10,8 @@ class AbrovaTraceExampleApp : Application() {
         super.onCreate()
 
         // Initialize AbrovaTrace SDK
-        val config = AbrovaTraceConfig.Builder("ab_live_your_api_key")
+        val config = AbrovaTraceConfig.Builder(BuildConfig.ABROVA_TRACE_API_KEY.ifEmpty { "ab_live_your_api_key" })
+            .apply { if (BuildConfig.ABROVA_TRACE_API_URL.isNotEmpty()) apiUrl(BuildConfig.ABROVA_TRACE_API_URL) }
             .environment(if (BuildConfig.DEBUG) "development" else "production")
             .release(BuildConfig.VERSION_NAME)
             .debug(BuildConfig.DEBUG)
