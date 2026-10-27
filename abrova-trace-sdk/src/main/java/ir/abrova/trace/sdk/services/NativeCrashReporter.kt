@@ -68,8 +68,14 @@ internal class NativeCrashReporter(
         val pending = mutableListOf<PendingCrash>()
         val handled = handledCrashes?.readAll() ?: emptyList()
 
-        for (info in infos) {
-            if (info.timestamp <= sinceTimestamp) continue
+        // Android can keep more than one record for one process death (a native abort on a
+        // Flutter app is recorded as a native crash and again as a JVM crash): one report each.
+        val deaths = onePerProcessDeath(
+            infos.filter { exitReasonKey(it.reason) != null },
+            { it.pid }, { it.reason }, { it.timestamp }
+        )
+        for ((info, newest) in deaths) {
+            if (newest <= sinceTimestamp) continue
             val reasonKey = exitReasonKey(info.reason) ?: continue
             if (isAlreadyReported(info.reason, info.pid, info.timestamp, handled)) {
                 AbrovaTraceLogger.debug(
@@ -77,8 +83,10 @@ internal class NativeCrashReporter(
                 )
                 continue
             }
+            // The newest time of the death is remembered once it is sent, so its other
+            // records are not reported on the next launch.
             pending += PendingCrash(
-                timestamp = info.timestamp,
+                timestamp = newest,
                 error = buildError(info, reasonKey, environment, releaseVersion, userAgent)
             )
         }
@@ -249,6 +257,37 @@ internal class NativeCrashReporter(
     }
 
     companion object {
+        /** Records of one pid this close together belong to the same death; a pid reused later is another one. */
+        internal const val SAME_DEATH_WINDOW_MS = 10_000L
+
+        /**
+         * One record per process death, oldest death first, each with the newest timestamp of
+         * its records. The record kept is the most telling one: a native crash, else an ANR,
+         * else the JVM crash.
+         */
+        internal fun <T> onePerProcessDeath(
+            records: List<T>,
+            pid: (T) -> Int,
+            reason: (T) -> Int,
+            timestamp: (T) -> Long
+        ): List<Pair<T, Long>> {
+            val rank = { r: T ->
+                when (reason(r)) {
+                    ApplicationExitInfo.REASON_CRASH_NATIVE -> 0
+                    ApplicationExitInfo.REASON_ANR -> 1
+                    else -> 2
+                }
+            }
+            val deaths = mutableListOf<MutableList<T>>()
+            for (record in records.sortedBy(timestamp)) {
+                val death = deaths.lastOrNull { d ->
+                    pid(d.first()) == pid(record) && timestamp(record) - timestamp(d.last()) <= SAME_DEATH_WINDOW_MS
+                }
+                if (death != null) death += record else deaths += mutableListOf(record)
+            }
+            return deaths.map { d -> d.minByOrNull(rank)!! to timestamp(d.last()) }
+        }
+
         /**
          * True for the exit record of a JVM crash that the uncaught exception
          * handler already sent or stored. Native crash and ANR records are

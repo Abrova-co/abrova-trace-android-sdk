@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.4 - 2026-10-28
+
+- A crash that Android records twice for the same process (seen with a native abort in Flutter apps: once as a native crash, once as a JVM crash) is reported once, as the native crash.
+
 ## 0.2.3 - 2026-10-06
 
 - One hang is one ANR report. Before, a report was sent every `anrTimeoutMs` while the main thread stayed blocked.

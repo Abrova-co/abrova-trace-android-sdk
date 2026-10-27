@@ -121,6 +121,45 @@ class HandledCrashMarkersTest {
         assertFalse(NativeCrashReporter.isAlreadyReported(reasonAnr, 4321, crashTime + 40, handled))
     }
 
+    // --- One report per process death ---
+
+    private data class Exit(val pid: Int, val reason: Int, val timestamp: Long)
+
+    private fun deaths(vararg records: Exit) =
+        NativeCrashReporter.onePerProcessDeath(records.toList(), { it.pid }, { it.reason }, { it.timestamp })
+
+    @Test
+    fun `a native crash recorded twice for one process is reported once, as the native crash`() {
+        // Seen on a Flutter app: abort() left REASON_CRASH_NATIVE, then REASON_CRASH half a second later.
+        val result = deaths(Exit(28211, reasonCrash, crashTime + 556), Exit(28211, reasonCrashNative, crashTime))
+
+        assertEquals(1, result.size)
+        assertEquals(reasonCrashNative, result[0].first.reason)
+        // The newest time of the death is what gets remembered, so the second record is not sent on the next launch.
+        assertEquals(crashTime + 556, result[0].second)
+    }
+
+    @Test
+    fun `an ANR and a JVM crash of one process are one death, reported as the ANR`() {
+        val result = deaths(Exit(700, reasonCrash, crashTime + 100), Exit(700, reasonAnr, crashTime))
+
+        assertEquals(listOf(reasonAnr), result.map { it.first.reason })
+    }
+
+    @Test
+    fun `different processes are separate deaths, oldest first`() {
+        val result = deaths(Exit(2, reasonCrashNative, crashTime + 60_000), Exit(1, reasonCrash, crashTime))
+
+        assertEquals(listOf(1, 2), result.map { it.first.pid })
+    }
+
+    @Test
+    fun `a reused pid far apart in time is a separate death`() {
+        val result = deaths(Exit(900, reasonCrash, crashTime + 3_600_000), Exit(900, reasonCrashNative, crashTime))
+
+        assertEquals(2, result.size)
+    }
+
     @Test
     fun `reason codes match the platform`() {
         assertEquals(android.app.ApplicationExitInfo.REASON_CRASH, reasonCrash)
